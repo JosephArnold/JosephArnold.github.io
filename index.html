@@ -1,1 +1,74 @@
-Hello World
+<html>
+<head>
+<style>
+code {
+  font-family: Consolas,"courier new";
+  color: crimson;
+  background-color: #f1f1f1;
+  padding: 2px;
+  font-size: 105%;
+}
+</style>
+</head>
+<body>
+
+<h1> Optimizing the distance computation</h1>
+Distance computation is at the core of any clustering algorithm. 
+Distances between two data points is a measure of how similar the two data points are. 
+There are a number of distance computation measures and here we will talk about the Euclidean distance computation which is one of the most widely used similarity measure.
+<p>
+Given a set of data points, computing the distance between each point and all the other points in the dataset is helpful in determining points that are close to each other.
+In such a case we store the distances between every point and all the other points in a Matrix. 
+Such a Matrix be of size nxn where n is the total number of points. 
+The ith row and the jth column of the distance Matrix denoted as M[i][j] will contain the distance between the ith point and the jth point.
+The code written below in C++ takes a dataset as an input parameter. 
+The dataset is a Matrix where each point's coordinates or the dimensions are stored in a row. 
+The size of each row is equal to the dimension of the dataset. Since the distance computation matrix is symmetric, 
+you will only need only n^2/2 number of operations to compute the matrix.
+</p>
+<p>
+A C++ snippet to compute the distance is given below.
+<pre><code class="C++">
+template<typename T>
+    std::vector<std::vector<T>> computeDistanceActual(std::vector<std::vector<T>>& dataset) {
+        const uint64_t num_of_points = dataset.size();
+        const uint64_t num_of_features = dataset[0].size();
+        std::vector<std::vector<T>> distance_matrix(num_of_points, std::vector<T>(num_of_points));
+        for(uint64_t i = 0; i < num_of_points; i++) {
+           for(uint64_t j = i+1; j < num_of_points; j++) {
+                for(uint64_t k = 0; k < num_of_features; k++) {
+                    T diff = dataset[i][k] - dataset[j][k];
+                    distance_matrix[i][j] += diff * diff;
+                }
+                distance_matrix[j][i] = distance_matrix[i][j]; //dist(i,j) = dist(j,i)
+           }
+        }
+        return distance_matrix;
+    }
+</code></pre>
+</p>
+<h2>How can one improve the performance of this code? </h2>
+Most processors support SIMD(Single Instruction Multiple Data) instructions. SIMD instructions are basically instructions
+that execute an arithmetic or a logical instruction on a set of data instead of the conventional scalar instructions that would 
+operate on just one data at a time.
+Let us consider a simpler example. You have two arrays A[] and B[] and you want to add each entry of A[] with the corresponding
+entry in B, how will you do that? A simple for loop that iterates through arrays A and B? Yes, that is pretty much it.
+But do you want to just add one element at a time? What if you can add 8 elements at a time? 
+Your for loop should then only run n/8 times where n is the length of arrays A and B. 
+Well, in order to that one would need to use SIMD instructions.A SIMD instruction can process multiple data at once. My favourite analogu would 
+be that when you want to chop beans or chillies, you will hold a bunch of them together and cut through them using a knife instead of 
+cutting them one at a time. 
+
+In order to execute a SIMD instruction on multiple data, the data must be stored onto a SIMD register. For example,
+you have a SIMD instruction that can operate on 8 floating point data types at a time, you will have to load all the 8 values
+onto a SIMD register.
+Now, how can one use a SIMD instruction in your code? There are two ways of doing that, a.) You can use assembly code and directly use
+the SIMD instructions supported by your processor or b.) You can use intrinsics that you can use in a high level programming language
+like C/C++. These are basically C type functions that will call the SIMD instruction without having to resort to the cumbersome task
+of writing assembly code. There is also another way to use SIMD instructions which is the easiest way. Simply let the compiler to do it for 
+you. However, that depends on how smart the compiler is automatically vectorize (figure out how to use SIMD instructions) in your code.  
+
+Now, let us explore how one can use SIMD code on a Intel CPU. SIMD instructions on x86 machines (Intel and AMD) are popularly known as AVX (Advanced
+vector instructions )
+</body>
+</html>
