@@ -1,13 +1,19 @@
 <html>
 <head>
 <style>
-code {
+ code {
   font-family: Consolas,"courier new";
   color: crimson;
   background-color: #f1f1f1;
   padding: 2px;
   font-size: 105%;
 }
+ pre {
+            padding: 10px;
+            border: 1px solid #ccc;
+            overflow: auto;
+            background-color: #f1f1f1;
+        }
 </style>
 </head>
 <body>
@@ -55,20 +61,71 @@ Let us consider a simpler example. You have two arrays A[] and B[] and you want 
 entry in B, how will you do that? A simple for loop that iterates through arrays A and B? Yes, that is pretty much it.
 But do you want to just add one element at a time? What if you can add 8 elements at a time? 
 Your for loop should then only run n/8 times where n is the length of arrays A and B. 
-Well, in order to that one would need to use SIMD instructions.A SIMD instruction can process multiple data at once. My favourite analogu would 
+Well, in order to that one would need to use SIMD instructions.A SIMD instruction can process multiple data at once. My favourite analogy would 
 be that when you want to chop beans or chillies, you will hold a bunch of them together and cut through them using a knife instead of 
 cutting them one at a time. 
 
 In order to execute a SIMD instruction on multiple data, the data must be stored onto a SIMD register. For example,
 you have a SIMD instruction that can operate on 8 floating point data types at a time, you will have to load all the 8 values
 onto a SIMD register.
-Now, how can one use a SIMD instruction in your code? There are two ways of doing that, a.) You can use assembly code and directly use
-the SIMD instructions supported by your processor or b.) You can use intrinsics that you can use in a high level programming language
+Now, how can one use a SIMD instruction in your code? There are two ways of doing that,
+<p> a.) You can use assembly code and directly use
+the SIMD instructions supported by your processor</p><p> b.) You can use intrinsics that you can use in a high level programming language
 like C/C++. These are basically C type functions that will call the SIMD instruction without having to resort to the cumbersome task
-of writing assembly code. There is also another way to use SIMD instructions which is the easiest way. Simply let the compiler to do it for 
+of writing assembly code.</p>
+ There is also another way to use SIMD instructions which is the easiest way. Simply let the compiler to do it for 
 you. However, that depends on how smart the compiler is automatically vectorize (figure out how to use SIMD instructions) in your code.  
 
 Now, let us explore how one can use SIMD code on a Intel CPU. SIMD instructions on x86 machines (Intel and AMD) are popularly known as AVX (Advanced
-vector instructions )
+vector instructions). We will rewite the distance computation the AVX intrinsics provided by Intel for running our code on x86 machines (AMD/Intel).
+
+<p>
+<pre><code class="C++">
+std::vector<std::vector<float>> computeDistance(std::vector<std::vector<float>>& dataset) {
+
+    const uint64_t num_of_points = dataset.size();
+    const uint64_t num_of_features = dataset[0].size();
+    std::vector<std::vector<float>> distance_matrix(num_of_points, std::vector<float>(num_of_points));
+    for(uint64_t i = 0; i < num_of_points; i++) {
+       for(uint64_t j = i+1; j < num_of_points; j++) {
+            __m256 sum_vec = _mm256_setzero_ps(); //Initialize sum_vec to 0.0f
+            uint64_t k = 0;
+            for(; k < num_of_features; k =k + 8) {
+                __m256 coordinate_dataset1 = _mm256_loadu_ps(&dataset[i][k]); /*Load a maximum of 8 floats from ith row. */ 
+                __m256 coordinate_dataset2 = _mm256_loadu_ps(&dataset[j][k]); /*Load a maximum of 8 floats from jth row. */ 
+                __m256 diff = _mm256_sub_ps(coordinate_dataset1, coordinate_dataset2); /*SIMD subtraction of 8 floats from ith row and 8 floats from jth row. */
+                __m256 sq_diff = _mm256_mul_ps(diff, diff); /*SIMD multiplication */
+                sum_vec =  _mm256_add_ps(sum_vec, sq_diff); /*Add the contents of sq_diff and sum_vec */
+            }
+            float temp[8];
+            _mm256_storeu_ps(temp, sum_vec); /*Store the contents of sum_vec in temp array */
+            float distance = temp[0] + temp[1] + temp[2] + temp[3] + temp[4] + temp[5] + temp[6] + temp[7]; /*add the contents of temp array into a variable. (x1-x2)^2 + (y1-y2^2/
+            // Store the result in the distance matrix
+			/*For those elements which are not computed by SIMD register */
+            for (; k < num_of_features; k++) {
+                float diff = dataset[i][k] - dataset[j][k];
+                distance += diff * diff;
+            }
+            distance_matrix[i][j] = distance;
+            distance_matrix[j][i] = distance;
+
+        }
+
+    }
+    return distance_matrix;
+}
+</code></pre>
+ </p>
+
+<p> Note that the data type <code>__m256</code> defines a vector length of 256 bits and will hold data of type single precision float which essentially means you can store or pack 8 single precison floats into the register. In order to store double
+precision floats, we will have to use <code>__m256d</code> and this in turn essentially means you can store 4 double precision floats in the 256 bit register. <code>_mm256_setzero_ps</code> sets a 256 vector to hold 8 single precison values, each equal to 0.0f.
+<code>_mm256_loadu_ps(float* addr)</code> will load a maximum of 8 floating point values starting from address location <code>addr</code>. Note that the 'u' in 
+<code>_mm256_loadu_ps</code> refers to unalligned memory address. In the case of loading values from alligned memory address i.e addresses are aligned on a 32 bit boundary, then you
+can use <code>_mm256_load_ps</code>. Remember using <code>_mm256_load_ps</code> for values that are not alligned will lead to a crash or unexpected behavior.
+<code>_mm256_sub_ps</code>, <code>_mm256_mul_ps</code> and <code>_mm256_add_ps</code> are SIMD operations that are used to subtract, multiply and add respectively. 
+Similar to the load operation, we have <code>_mm256_storeu_ps(float* array, _mm256 reg )</code> that will store values from the register into <code>array</code>.
+Remember, similar to the load SIMD operation, we have alligned and unalligned store operation as well.  
+</p> 
+ 
 </body>
 </html>
