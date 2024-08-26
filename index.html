@@ -14,6 +14,17 @@
             overflow: auto;
             background-color: #f1f1f1;
         }
+		
+ .center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+table, th, td {
+  border: 1px solid black;
+  border-collapse: collapse;
+}
 </style>
 </head>
 <body>
@@ -35,8 +46,8 @@ you will only need only n^2/2 number of operations to compute the matrix.
 <p>
 A C++ snippet to compute the distance is given below.
 <pre><code class="C++">
-template<typename T>
-    std::vector<std::vector<T>> computeDistanceActual(std::vector<std::vector<T>>& dataset) {
+template&lttypename T&gt
+    std::vector&ltstd::vector&ltT&gt&gt computeDistanceActual(std::vector&ltstd::vector&ltT&gt&gt& dataset) {
         const uint64_t num_of_points = dataset.size();
         const uint64_t num_of_features = dataset[0].size();
         std::vector<std::vector<T>> distance_matrix(num_of_points, std::vector<T>(num_of_points));
@@ -62,9 +73,11 @@ entry in B, how will you do that? A simple for loop that iterates through arrays
 But do you want to just add one element at a time? What if you can add 8 elements at a time? 
 Your for loop should then only run n/8 times where n is the length of arrays A and B. 
 Well, in order to that one would need to use SIMD instructions.A SIMD instruction can process multiple data at once. My favourite analogy would 
-be that when you want to chop beans or chillies, you will hold a bunch of them together and cut through them using a knife instead of 
+be that when you want to chop beans or chillies, you would hold a bunch of them together and cut through them using a knife instead of 
 cutting them one at a time. 
-
+<br />
+<img src='Assets/Images/SIMD_ADD.png' class="center"></img>
+<br />
 In order to execute a SIMD instruction on multiple data, the data must be stored onto a SIMD register. For example,
 you have a SIMD instruction that can operate on 8 floating point data types at a time, you will have to load all the 8 values
 onto a SIMD register.
@@ -81,16 +94,16 @@ vector instructions). We will rewite the distance computation the AVX intrinsics
 
 <p>
 <pre><code class="C++">
-std::vector<std::vector<float>> computeDistance(std::vector<std::vector<float>>& dataset) {
+std::vector&ltstd::vector&ltfloat&gt&gt computeDistance(std::vector&ltstd::vector&ltfloat&gt&gt& dataset) {
 
-    const uint64_t num_of_points = dataset.size();
-    const uint64_t num_of_features = dataset[0].size();
+    const int64_t num_of_points = dataset.size();
+    const int64_t num_of_features = dataset[0].size();
     std::vector<std::vector<float>> distance_matrix(num_of_points, std::vector<float>(num_of_points));
-    for(uint64_t i = 0; i < num_of_points; i++) {
-       for(uint64_t j = i+1; j < num_of_points; j++) {
+    for(int64_t i = 0; i < num_of_points; i++) {
+       for(int64_t j = i+1; j < num_of_points; j++) {
             __m256 sum_vec = _mm256_setzero_ps(); //Initialize sum_vec to 0.0f
-            uint64_t k = 0;
-            for(; k < num_of_features; k =k + 8) {
+            int64_t k = 0;
+            for(; k < (num_of_features-8); k =k + 8) {
                 __m256 coordinate_dataset1 = _mm256_loadu_ps(&dataset[i][k]); /*Load a maximum of 8 floats from ith row. */ 
                 __m256 coordinate_dataset2 = _mm256_loadu_ps(&dataset[j][k]); /*Load a maximum of 8 floats from jth row. */ 
                 __m256 diff = _mm256_sub_ps(coordinate_dataset1, coordinate_dataset2); /*SIMD subtraction of 8 floats from ith row and 8 floats from jth row. */
@@ -101,7 +114,8 @@ std::vector<std::vector<float>> computeDistance(std::vector<std::vector<float>>&
             _mm256_storeu_ps(temp, sum_vec); /*Store the contents of sum_vec in temp array */
             float distance = temp[0] + temp[1] + temp[2] + temp[3] + temp[4] + temp[5] + temp[6] + temp[7]; /*add the contents of temp array into a variable. (x1-x2)^2 + (y1-y2^2/
             // Store the result in the distance matrix
-			/*For those elements which are not computed by SIMD register */
+			
+			/*For those elements that are leftover => dataset[i][k-8] to dataset[i][num_of_features]*/
             for (; k < num_of_features; k++) {
                 float diff = dataset[i][k] - dataset[j][k];
                 distance += diff * diff;
@@ -124,8 +138,110 @@ precision floats, we will have to use <code>__m256d</code> and this in turn esse
 can use <code>_mm256_load_ps</code>. Remember using <code>_mm256_load_ps</code> for values that are not alligned will lead to a crash or unexpected behavior.
 <code>_mm256_sub_ps</code>, <code>_mm256_mul_ps</code> and <code>_mm256_add_ps</code> are SIMD operations that are used to subtract, multiply and add respectively. 
 Similar to the load operation, we have <code>_mm256_storeu_ps(float* array, _mm256 reg )</code> that will store values from the register into <code>array</code>.
-Remember, similar to the load SIMD operation, we have alligned and unalligned store operation as well.  
-</p> 
+Remember, similar to the load SIMD operation, we have the alligned and unalligned store operation as well.  
+Also, remember while using <code>_mm256_loadu_ps</code> to load values from an array into a vector, the array must contain at least 8 single precision floats failing which 
+<code>_mm256_loadu_ps</code> will try load values beyond the last element in the array. Hence we run our vectorized loop only from 0 till num_of_features-8.
+Of course, if you are using a 128 bit vector to load floats, you can use num_of_features-4. 
+Finally, once you do not enough values to load onto a SIMD register, you can use simply use scalar operations to take care of the remaining elements.
+</p>
+<p>
+On my 12th Generation i5 laptop running at 2.1GHz with 16GB RAM, I ran both the vectorized and the non vectorized code for a dataset of size 20000 with the number of features being equal to 16.  
+Time taken by vectorized function: 3790 milliseconds
+Time taken by reference function: 4510 milliseconds
+
+Of course the numbers will vary from system to system and is dependent on a number of factors such as the clock frequency, number of cores, cache memroy and the other applications running on the system etc.
+But how can we exploit the SIMD capabilites of a processor if the number of features of the dataset is lesser than the size of the vector register?
+The simple trick in such a case is to load each feature into a seperate SIMD register. 
+For example, imagine our dataset has three features, (x,y,z)
+Point 1 - (x1, y1, z1)
+Point 2 - (x2, y2, z2)
+and so on...
+We can load all the x dimension values into a SIMD register, the y dimension values into another SIMD register and finally, the z dimension
+values into the third SIMD register.
+The problem with such an approach is that the x,y and z coordinates are not stored as contigous locations in the memory.
+For example the x dimension values are stores in dataset[0][0], dataset[1][0], dataset[2][0] etc.
+Let us for now imagine that each of the x,y and z coordinates are stored in contigous locations in the memory.  This is also called as the column major order.
+<br />
+<img src='Assets/Images/Data_layout.png' class="center"></img>
+<br />
+<br />
+<img src='Assets/Images/SIMD_LAYOUT_COLUMN_MAJOR.png' class="center"></img>
+<br />
+<p>
+In order to compute the distance from point 'P' to all other points 'P1','P2','P3', we go dimension by dimension for each point. We first broadcast
+the first dimension of point 'P' into a SIMD register and then subsequently load the first dimensions of 'n' number of points into another SIMD
+register where 'n' is the size of the SIMD register. Once we have the SIMD operations to compute the Euclidean distances completed, we will have the distances 
+from point 'P' to 'n' other points in the SIMD register that stores the result of the SIMD computations. Hence we compute 'n' distances at a time 
+instead of only point at a time like in the previous approach. The C++ code to compute the distances for a column major dataset is 
+given below.
+</p>
+<p>
+<pre><code class="C++">
+std::vector&ltstd::vector&ltfloat&gt&gt computeDistanceColumnMajor(std::vector&ltstd::vector&ltfloat&gt&gt& dataset) {
+
+    const int64_t num_of_points = dataset[0].size();
+    const int64_t num_of_features = dataset.size();
+    std::vector<std::vector<float>> distance_matrix(num_of_points, std::vector<float>(num_of_points));
  
+    for(int64_t i = 0; i < num_of_points; i++) {
+
+       int64_t j = 0;
+       for(; j < (num_of_points-8); j = j + 8) {
+
+            __m256 sum_vec = _mm256_setzero_ps();
+
+            for(int64_t k = 0; k < num_of_features; k++) {
+                __m256 coordinate_i = _mm256_set1_ps(dataset[k][i]); /*Broadcast the kth dimension of point 'i' */
+                __m256 coordinates_j = _mm256_loadu_ps(&dataset[k][j]);
+                __m256 diff = _mm256_sub_ps(coordinate_i, coordinates_j);
+                __m256 sq_diff = _mm256_mul_ps(diff, diff);
+                sum_vec =  _mm256_add_ps(sum_vec, sq_diff);
+            }
+
+            /*Store distances from i to upto 8 points */
+            _mm256_storeu_ps(&distance_matrix[i][j], sum_vec);
+       }
+       //Compute distances for left over points
+       for (; j < num_of_points; j++) {
+
+            float distance = 0.0f;
+
+            for(int64_t k = 0; k < num_of_features; k++) {
+
+                float diff = dataset[k][i] - dataset[k][j];
+                distance += diff * diff;
+            }
+            distance_matrix[i][j] = distance;
+       }
+ }
+   return distance_matrix;
+}
+</code>
+</pre>
+The AVX2 intrinsic to do the same is <code>_mm256_set1_ps(float value)</code>
+</p>
+<p>
+Let us benchmark the non vectorized implementation and both the vectorized implementations (column major and row major) and evaluate the performance gains.
+For the benchmark, I use a dataset of 20000 points with 9 features. In the row major vectorization strategy, there would be just 9 values that could be 
+vectorized in a given iteration which means I could load 8 single precision floats in one iteration and then the remaining dimension will be computed in the 
+for loop that takes care of the rest of the elements. However, in the case of the column major dataset, we have a total of 20000 values that could be vectorized, 8 at a time.
+Let us see what the benchmark numbers say. 
+<table>
+  <tr>
+    <th>Non vectorized function</th>
+    <th>3315 ms</th>
+  </tr>
+  <tr>
+    <th>Row major vectorization</th>
+    <th>3525 ms</th>
+  </tr>
+  <tr>
+    <th>Column major vectorization</th>
+    <th>1656 ms</th>
+  </tr>
+</table>
+Well, the row major vectorization is actually slower than the non vectorized implementation.As the number of features per dimension is lesser, the vectorization overhead
+is simply not worth it. Notice that the for loop that runs over the dimensions is now split into two. One that uses SIMD instructions and the other one to
+account for the elements that were not vectorized (the left over elements). The column major vectorization is a clear winner here.
 </body>
 </html>
