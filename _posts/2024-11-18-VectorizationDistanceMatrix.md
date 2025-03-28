@@ -207,3 +207,61 @@ Let us see what the benchmark numbers say.
 Well, the row major vectorization is actually slower than the non vectorized implementation.As the number of features per dimension is lesser, the vectorization overhead
 is simply not worth it. Notice that the for loop that runs over the dimensions is now split into two. One that uses SIMD instructions and the other one to
 account for the elements that were not vectorized (the left over elements). The column major vectorization is a clear winner here.
+Can we improve it further?
+We have used a vector of vectors to create the dataset and the distance matrix. While it may be easier to visualize our matrices as vector of vectors, for high performance computing applications,
+it is always better to store the matrices as contiguous locations in the memory. Most of the highly optimized linear algebra packages do that. Also creating a vector involves some book keeping i.e 
+storing the pointers to the starting address of the vector and the size of the vector for example. The book keeping only increases as you nested vectors or vector of vectors.
+Let us see if changing from vector of vector has any bearing on the performance.
+{% highlight cpp %}
+std::vector<float> distance_matrix(num_of_points * num_of_points)
+std::vector<float> dataset1(num_of_points * num_of_features);
+{% endhighlight %}
+
+{% highlight cpp %}
+std::vector<float> computeDistanceColumnMajor(std::vector<float>& dataset, const int64_t& num_of_points,  const int64_t& num_of_features) {
+    std::vector<float> distance_matrix(num_of_points * num_of_points);
+    for(auto i = 0; i < num_of_points; i++) {
+       auto j = 0;
+       const auto base_address = i * num_of_points;
+       for(; j < (num_of_points-8); j = j + 8) {
+            __m256 sum_vec = _mm256_setzero_ps();
+            for(auto k = 0; k < num_of_features; k++) {
+                __m256 coordinate_i = _mm256_set1_ps(dataset[k * num_of_points + i]);
+                __m256 coordinates_j = _mm256_loadu_ps(&dataset[k * num_of_points + j]);
+                __m256 diff = _mm256_sub_ps(coordinate_i, coordinates_j);
+                __m256 sq_diff = _mm256_mul_ps(diff, diff);
+                sum_vec =  _mm256_add_ps(sum_vec, sq_diff);
+            }
+            /*Store distances from ith point to upto 8 points */
+            _mm256_storeu_ps(&distance_matrix[base_address + j], sum_vec);
+       }
+       //Compute distances for left over points
+       for (; j < num_of_points; j++) {
+            auto distance = 0.0f;
+            for(auto k = 0; k < num_of_features; k++) {
+                auto diff = dataset[k * num_of_points + i] - dataset[k * num_of_points + j];
+                distance += diff * diff;
+            }
+            distance_matrix[base_address + j] = distance;;
+       }
+   }
+   return distance_matrix;
+}
+{% endhighlight %}
+Here are the benchmark results after the change
+<table>
+  <tr>
+    <th>Non vectorized function</th>
+    <th>1986 ms</th>
+  </tr>
+  <tr>
+    <th>Row major vectorization</th>
+    <th>1958 ms</th>
+  </tr>
+  <tr>
+    <th>Column major vectorization</th>
+    <th>768 ms</th>
+  </tr>
+</table>
+
+The writing is on the wall. Avoid vector of vectors.
