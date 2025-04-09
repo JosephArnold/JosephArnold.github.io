@@ -76,4 +76,12 @@ The partial derivative of u with respect to y is also computed similarly by pass
 Well, of course one can argue why cannot compute the partial derivative of both the inputs in one pass in the forward mode of automatic differentiation or likewise
 do the similar thing in the backward pass. The problem with that is you will have to taking up a lot of memory to track the derivatives of each of the inputs. 
 Unlike our example here, a network can have inputs consisting of thousands of dimensions and millions of parameters.  
+**Why is backpropogation the most efficient way to compute the gradient of a function?**
+Most of neural networks optimize multivariate functions that map a very large number of inputs to a much lower number of outputs. Remember that the Jacobian matrix is of size n*m where n 
+is the number of outputs and m is the number of inputs. For example, in an image classification problem, let each image consititue 64*64 pixels. And each pixel be represented 
+by three channels (Red, Blue and Green). The number of inputs to a fully connected neural network would then be, 64*64*3 = 12288. And the number classes into which
+you want the images to be classified is going to be a much lesser than that!
+So, typically, a Jacobian matrix has a very large number of columns compared to that of rows. It 
+makes more sense to use a algorithm that computes the Jacobian, a row for each iteration than a column for an iteration. The fact that backpropogation
+computes a row of the Jacobian matrix in each iteration makes it a much more computationally efficient algorithm for the computation of the Jacobian matrix in a typical neural network.
 
