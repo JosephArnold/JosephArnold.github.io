@@ -1,12 +1,18 @@
 ---
 layout: post
-title:  "Understanding Backpropogation!"
-date:   2025-03-28 16:35:07 +0100
+title:  "The problem with backpropogation"
+date:   2025-04-09 16:35:07 +0100
 categories: jekyll update
 ---
 <span style="color:black">
-# **Understanding Backpropogation**
-Backpropgation is a very efficient method of automatic differentiation that is used in neural networks where the gradient of the function to be optimized is to be computed.
+# **The problem with backpropogation**
+A quick recap on backpropagation can be found [here](https://josepharnold.github.io/jekyll/update/2024/11/18/UnderstandingBackpropgation.html).
+It is a well known fact that backpropagation is a highly efficient method to compute the gradient of a function. In order to compute gradient of a function using backpropagation
+two passes or traversals over the neural network is required. The forward pass to evaluate the output of the function for a given input or a 
+batch of inputs and a backward pass to caluclate the gradients of each of the parameters with respect to the output. In a network consisting of several layers,
+after the forward pass of a layer, the parameters of the layer can only be updated after the forward pass of the entire layer is completed and the errors are propogated from upstream layers.
+Imagine a model is pipelined accross different GPUs where each GPU computes the forward and the backward pass for a subset of the layers of a model.
+Once the GPU has completed the forward pass for the layers allocated to it, it must wait for the gradients to arrive from upstream in the backward pass.   
 Before we go into the details of the backpropogation, let us quickly recap the need for a automatic differentiation technique.
 Consider a multivariate function,
 f(x,y) that maps to a vector [u,v] where u = sin(4xy) and v = cos(2x + 2y)
@@ -85,14 +91,4 @@ you want the images to be classified is going to be a much lesser than that!
 So, typically, a Jacobian matrix has a very large number of columns compared to that of rows. It 
 makes more sense to use a algorithm that computes the Jacobian, a row for each iteration than a column for an iteration. The fact that backpropogation
 computes a row of the Jacobian matrix in each iteration makes it a much more computationally efficient algorithm for the computation of the Jacobian matrix in a typical neural network.
-**Inputs in batches**
-Consider a fully connected neural network that classifies images into one of the 10 classes. A classic example of such a dataset is the [MNIST](https://en.wikipedia.org/wiki/MNIST_database) handwritten digit database. 
-Each image is of size 28*28 and each pixel represents either a 1 or 0 (Binary image).The size of each image is hence 28*28=784. The dataset consists of a total 60,000 images. A fully connected layer will have 784 nodes in the input layer and 10 output nodes
-or neurons in the output layer. 
-Typically, each layer in the neural netowrk is represented by a weight matrix. It is the values of these matrices that we want to determine at the end of the training processes.
-The dimension of the weight matrix for each layer is of size m*n where m is the number of nodes or neurons in the layer and n is the number of nodes in the previous layer.
-Let us assume that the second layer has 128 neurons. The size of the weight matrix is then 128*784. Now usually, for performance reasons, one does not train a network using thousands of images, image by image.
-That leads to  a severe under utilization of the computing hardware. So, the input dataset is fed into the network in terms of batches. Let us assume that each batch is of size 64. In this
-case, the input to the network is actually a matrix of 64*784. In order to account for different batch sizes, most deep network framweworks create a input layer of size (batch size * size of input).
-Now in each layer, we have the input multiplied with weight matrix of the layer.
-z = x * Transpose(W) + b. Size of x is 64*784. Transpose(W) is of size 784*128. Hence the output of the second layer is of size 64*128. 
+
